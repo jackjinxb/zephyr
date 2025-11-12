@@ -44,7 +44,7 @@
 
 static struct {
 	struct {
-		void              *param;
+		void              *param;	//struct lll_adv_iso lll_conn
 		lll_is_abort_cb_t is_abort_cb;
 		lll_abort_cb_t    abort_cb;
 	} curr;
