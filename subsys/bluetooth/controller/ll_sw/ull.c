@@ -787,7 +787,7 @@ int ll_init(struct k_sem *sem_rx)
 
 	return  0;
 }
-
+//only hci_driver.c  hci_driver_close
 int ll_deinit(void)
 {
 	int err;
