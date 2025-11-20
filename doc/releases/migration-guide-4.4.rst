@@ -32,8 +32,25 @@ Boards
 Device Drivers and Devicetree
 *****************************
 
+QSPI
+===
+
+* :dtcompatible:`st,stm32-qspi` compatible nodes configured with ``dual-flash`` property
+  now need to also include the ``ssht-enable`` property to reenable sample shifting.
+  Sample shifting is configurable now and disabled by default.
+  (:github:`98999`).
+
 Bluetooth
 *********
+
+Bluetooth Host
+==============
+
+* :kconfig:option:`CONFIG_BT_SIGNING` has been deprecated.
+* :c:macro:`BT_GATT_CHRC_AUTH` has been deprecated.
+* :c:member:`bt_conn_le_info.interval` has been deprecated. Use
+  :c:member:`bt_conn_le_info.interval_us` instead. Note that the units have changed: ``interval``
+  was in units of 1.25 milliseconds, while ``interval_us`` is in microseconds.
 
 Networking
 **********
@@ -43,6 +60,13 @@ Other subsystems
 
 Modules
 *******
+
+Trusted Firmware-M
+==================
+
+* The ``SECURE_UART1`` TF-M define is now controlled by Zephyr's
+  :kconfig:option:`CONFIG_TFM_SECURE_UART`. This option will override any platform values previously
+  specified in the TF-M repository.
 
 Architectures
 *************
