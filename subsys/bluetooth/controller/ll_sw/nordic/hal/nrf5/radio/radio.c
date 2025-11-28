@@ -1394,7 +1394,7 @@ void radio_tmr_rx_disable(void)
 #else /* !CONFIG_SOC_COMPATIBLE_NRF5340_CPUNET && !CONFIG_SOC_COMPATIBLE_NRF54LX */
 #endif /* !CONFIG_SOC_COMPATIBLE_NRF5340_CPUNET && !CONFIG_SOC_COMPATIBLE_NRF54LX */
 }
-
+//lll_xxx.c maybe prepare_cb()
 void radio_tmr_tifs_set(uint32_t tifs)
 {
 #if defined(CONFIG_BT_CTLR_TIFS_HW)
