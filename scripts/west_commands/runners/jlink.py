@@ -5,6 +5,7 @@
 '''Runner for debugging with J-Link.'''
 
 import argparse
+import errno
 import ipaddress
 import logging
 import os
@@ -48,9 +49,9 @@ class JLinkBinaryRunner(ZephyrBinaryRunner):
 
     def __init__(self, cfg, device, dev_id=None,
                  commander=DEFAULT_JLINK_EXE,
-                 dt_flash=True, erase=True, reset=False,
-                 iface='swd', speed='auto', flash_script = None,
-                 loader=None, flash_sram=False,
+                 dt_flash=True, erase=True, reset=False, reset_type=None,
+                 iface='swd', speed='auto',
+                 flash_script = None, loader=None, flash_sram=False,
                  gdbserver='JLinkGDBServer',
                  gdb_host='',
                  gdb_port=DEFAULT_JLINK_GDB_PORT,
@@ -72,6 +73,7 @@ class JLinkBinaryRunner(ZephyrBinaryRunner):
         self.flash_sram = flash_sram
         self.erase = erase
         self.reset = reset
+        self.reset_type = reset_type
         self.gdbserver = gdbserver
         self.iface = iface
         self.speed = speed
@@ -119,8 +121,8 @@ class JLinkBinaryRunner(ZephyrBinaryRunner):
 
     @classmethod
     def capabilities(cls):
-        return RunnerCaps(commands={'flash', 'debug', 'debugserver', 'attach', 'rtt'},
-                          dev_id=True, flash_addr=True, erase=True, reset=True,
+        return RunnerCaps(commands={'flash', 'debug', 'debugserver', 'attach', 'rtt', 'reset'},
+                          dev_id=True, flash_addr=True, erase=True, reset=True, reset_types=True,
                           tool_opt=True, file=True, rtt=True, batch_debug=True)
 
     @classmethod
@@ -215,6 +217,7 @@ class JLinkBinaryRunner(ZephyrBinaryRunner):
                                  erase=args.erase,
                                  reset=args.reset,
                                  iface=args.iface, speed=args.speed,
+                                 reset_type=args.reset_type,
                                  flash_script=args.flash_script,
                                  gdbserver=args.gdbserver,
                                  loader=args.loader,
@@ -375,17 +378,29 @@ class JLinkBinaryRunner(ZephyrBinaryRunner):
             server_cmd += ['-nohalt']
             server_proc = self.popen_ignore_int(server_cmd)
             try:
-                sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                sock = None
                 # wait for the port to be open
                 while server_proc.poll() is None:
+                    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
                     try:
                         sock.connect(('localhost', self.rtt_port))
                         break
-                    except ConnectionRefusedError:
-                        time.sleep(0.1)
+                    except OSError as e:
+                        sock.close()
+                        # On at least macOS sock.connect() can fail with the
+                        # exception OSError(22, 'Invalid argument'), which
+                        # corresponds to errno EINVAL, by leaving the socket in
+                        # a non-recoverable state, hence let's wait and try
+                        # again.
+                        if e.errno in (errno.ECONNREFUSED, errno.EINVAL):
+                            time.sleep(0.1)
+                        else:
+                            raise e
                 self.run_telnet_client('localhost', self.rtt_port, sock)
-            except Exception as e:
-                self.logger.error(e)
+            except OSError as e:
+                self.logger.error(
+                    f'Failed to connect to the localhost:{self.rtt_port} socket: {e}',
+                )
             finally:
                 server_proc.terminate()
                 server_proc.wait()
@@ -414,6 +429,15 @@ class JLinkBinaryRunner(ZephyrBinaryRunner):
                     client_cmd += ['-ex', 'monitor go', '-ex', 'disconnect', '-ex', 'quit']
                 elif self.reset:
                     client_cmd += ['-ex', 'monitor reset']
+            if command == 'reset':
+                client_cmd += [
+                    '-ex', 'monitor halt',
+                    '-ex', 'monitor reset',
+                    '-ex', 'set confirm off',
+                    '-ex', 'monitor go',
+                    '-ex', 'disconnect',
+                    '-ex', 'quit',
+                ]
 
             if not self.gdb_host:
                 self.require(self.gdbserver)
@@ -428,6 +452,9 @@ class JLinkBinaryRunner(ZephyrBinaryRunner):
             'r',  # Reset and halt the target
             'BE' if self.build_conf.getboolean('CONFIG_BIG_ENDIAN') else 'LE'
         ]
+
+        if self.reset_type:
+            lines.insert(0, f"RSetType {self.reset_type}")
 
         if self.erase:
             lines.append('erase') # Erase all flash sectors
